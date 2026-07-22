@@ -1,1 +1,124 @@
-<!doctype html><meta charset=utf-8><title>Binance Market Monitor</title><p>UI — Крок 5.</p>
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Binance Market Monitor</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <!-- Свічки: lightweight-charts з CDN (без збірок і фреймворків) -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- Локальний фолбек, якщо CDN недоступний (застосунок працює офлайн) -->
+  <script>
+    if (!window.LightweightCharts) {
+      document.write('<scr' + 'ipt src="/static/vendor/lightweight-charts.standalone.production.js"><\/scr' + 'ipt>');
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Binance Market Monitor</div>
+    <div id="limits" class="limits">завантаження…</div>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main class="layout">
+    <!-- Зона 1: Вотчліст -->
+    <section class="panel watchlist">
+      <h2>Вотчліст</h2>
+      <div class="search">
+        <input id="searchInput" type="text" autocomplete="off"
+               placeholder="Пошук за назвою або тикером (напр. tesla, BTC)…">
+        <div id="searchResults" class="search-results hidden"></div>
+      </div>
+      <div class="table-wrap">
+        <table id="watchTable">
+          <thead>
+            <tr>
+              <th data-key="symbol">Тикер</th>
+              <th data-key="price" class="num">Ціна</th>
+              <th data-key="sigma_bps" class="num">σ bps</th>
+              <th data-key="sigma_pct" class="num">σ %ᵖ</th>
+              <th data-key="vol_ratio" class="num">Обсяг×</th>
+              <th data-key="roundtrip_bps" class="num">RT bps</th>
+              <th data-key="total_bps" class="num">Total bps</th>
+              <th data-key="total_usd" class="num">Total $</th>
+              <th data-key="state">Стан</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="watchBody"></tbody>
+        </table>
+        <div id="watchEmpty" class="empty">
+          Вотчліст порожній. Знайдіть символ у пошуку вище та натисніть «Додати».
+        </div>
+      </div>
+      <p class="hint">
+        σ %ᵖ — перцентиль волатильності всередині символу. Стан — колір за total bps
+        (пороги з конфіга). Порожні клітинки означають, що метрика ще рахується.
+      </p>
+    </section>
+
+    <!-- Зона 2: Деталь символу -->
+    <section class="panel detail">
+      <div class="detail-head">
+        <h2 id="detailTitle">Деталь символу</h2>
+        <div id="detailLive" class="detail-live"></div>
+      </div>
+      <div id="detailEmpty" class="empty">
+        Оберіть символ у вотчлісті, щоб побачити свічки й теплокарту.
+      </div>
+      <div id="detailBody" class="hidden">
+        <!-- Теплокарта важливіша за графік — вона перша -->
+        <div class="heatmap-block">
+          <div class="block-title">
+            Теплокарта: медіана total bps × година (Київ) × день тижня
+            <span class="sub">коли круговорот дешевший — темніше</span>
+          </div>
+          <div id="heatmap" class="heatmap"></div>
+          <div id="heatmapEmpty" class="empty small">
+            Дані теплокарти накопичуються під час роботи застосунку: кожна закрита
+            хвилина додає вимір. Залиште монітор увімкненим — карта заповниться.
+          </div>
+        </div>
+        <div class="chart-block">
+          <div class="block-title">Свічки 1m + обсяг (київський час)</div>
+          <div id="chart"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Зона 3: Журнал -->
+    <section class="panel journal">
+      <div class="journal-head">
+        <h2>Журнал стану «спокійно»</h2>
+        <div class="journal-actions">
+          <label class="chk"><input type="checkbox" id="journalOnlySel"> лише обраний символ</label>
+          <a id="csvLink" href="/api/journal.csv" class="btn">Експорт CSV</a>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="journalTable">
+          <thead>
+            <tr>
+              <th>Символ</th><th>Подія</th><th>Час (Київ)</th><th class="num">Тривалість</th>
+            </tr>
+          </thead>
+          <tbody id="journalBody"></tbody>
+        </table>
+        <div id="journalEmpty" class="empty">
+          Ще жодного входу у стан «спокійно». Коли символ витримає умови задану
+          кількість хвилин поспіль — тут з'явиться запис.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Лише публічні маркет-дані Binance. Без API-ключів, без ордерів, без автоторгівлі.
+    Застосунок показує виміряні числа — рішення ухвалює людина.
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
