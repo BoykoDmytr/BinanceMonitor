@@ -1,28 +1,30 @@
-# Конфіг Fly.io. Назву застосунку задасть `fly launch` (або змініть тут на власну).
-app = "binancemonitor"
-primary_region = "ams"   # Амстердам (ЄС) — щоб Binance не блокував за гео
+# fly.toml app configuration file generated for binancemonitor on 2026-07-22T18:22:24Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'binancemonitor'
+primary_region = 'ams'
 
 [build]
 
 [env]
-  BMM_HOST = "0.0.0.0"
-  BMM_PORT = "8080"
-  BMM_OPEN_BROWSER = "false"
-  BMM_DB_PATH = "/data/monitor.sqlite3"
+  BMM_DB_PATH = '/data/monitor.sqlite3'
+  BMM_HOST = '0.0.0.0'
+  BMM_OPEN_BROWSER = 'false'
+  BMM_PORT = '8080'
+
+[[mounts]]
+  source = 'bmm_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  # ВАЖЛИВО: не присипляти машину — інакше збирач статистики зупиниться
-  auto_stop_machines = false
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
 
-# Постійний том під SQLite — тут накопичується статистика
-[mounts]
-  source = "bmm_data"
-  destination = "/data"
-
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
