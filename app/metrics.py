@@ -77,16 +77,14 @@ def rolling_sigma(closes, window: int = 60) -> np.ndarray:
     """σ ковзним вікном по всій історії — розподіл для перцентиля.
 
     Вікно з `window` свічок = `window − 1` послідовних повернень.
+    Векторизовано через sliding_window_view (швидко навіть на 30 днях).
     """
     r = log_returns(closes)
     m = window - 1
     if r.size < m or m < 2:
         return np.array([])
-    # ковзне стандартне відхилення через префіксні суми
-    out = np.empty(r.size - m + 1)
-    for i in range(m, r.size + 1):
-        out[i - m] = np.std(r[i - m:i], ddof=1)
-    return out
+    sw = np.lib.stride_tricks.sliding_window_view(r, m)
+    return sw.std(axis=1, ddof=1)
 
 
 def percentile_rank(value: float, distribution) -> float:
@@ -122,17 +120,13 @@ def rolling_range_compression(highs, lows, closes, window: int = 60) -> np.ndarr
     h = np.asarray(highs, dtype=float)
     lo = np.asarray(lows, dtype=float)
     c = np.asarray(closes, dtype=float)
-    n = c.size
-    if n < window:
+    if c.size < window:
         return np.array([])
-    out = np.empty(n - window + 1)
-    for i in range(window, n + 1):
-        seg_c = c[i - window:i]
-        med = np.median(seg_c)
-        out[i - window] = (
-            (h[i - window:i].max() - lo[i - window:i].min()) / med * BPS
-            if med else float("nan")
-        )
+    hi_max = np.lib.stride_tricks.sliding_window_view(h, window).max(axis=1)
+    lo_min = np.lib.stride_tricks.sliding_window_view(lo, window).min(axis=1)
+    med = np.median(np.lib.stride_tricks.sliding_window_view(c, window), axis=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out = np.where(med != 0, (hi_max - lo_min) / med * BPS, np.nan)
     return out
 
 
