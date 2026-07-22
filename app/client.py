@@ -115,8 +115,10 @@ class BinanceClient:
 
     # ─────────────────── публічні ендпоінти ───────────────────
 
-    async def exchange_info(self) -> dict:
-        resp = await self._request("/api/v3/exchangeInfo")
+    async def exchange_info(self, symbol: str | None = None) -> dict:
+        # ?symbol= повертає лише один символ — легкий запит для selfcheck
+        params = {"symbol": symbol} if symbol else None
+        resp = await self._request("/api/v3/exchangeInfo", params)
         data = resp.json()
         # Прочитати реальний ліміт ваги замість хардкоду
         for rl in data.get("rateLimits", []):
