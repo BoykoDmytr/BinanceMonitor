@@ -26,15 +26,21 @@ BSTOCK_SYMBOLS = [
 ]
 
 last_used_weight = "?"
+active_base = BASE  # після першого 4xx (напр. 451 гео-блок) перемикаємось на дзеркало
 
 
 def get(client: httpx.Client, path: str, params: dict | None = None) -> httpx.Response:
-    """GET з фолбеком на дзеркало при 4xx від основного хоста."""
-    global last_used_weight
-    resp = client.get(BASE + path, params=params)
-    if 400 <= resp.status_code < 500 and resp.status_code != 429:
-        print(f"  [!] {BASE}{path} -> {resp.status_code}, пробую дзеркало {MIRROR}")
-        resp = client.get(MIRROR + path, params=params)
+    """GET з фолбеком на дзеркало при 4xx від основного хоста.
+
+    Дзеркало запам'ятовується як активний хост, щоб не бити
+    в заблокований основний на кожному запиті.
+    """
+    global last_used_weight, active_base
+    resp = client.get(active_base + path, params=params)
+    if 400 <= resp.status_code < 500 and resp.status_code != 429 and active_base == BASE:
+        print(f"  [!] {BASE}{path} -> {resp.status_code}, перемикаюсь на дзеркало {MIRROR}")
+        active_base = MIRROR
+        resp = client.get(active_base + path, params=params)
     weight = resp.headers.get("X-MBX-USED-WEIGHT-1M")
     if weight is not None:
         last_used_weight = weight
