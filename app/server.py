@@ -7,7 +7,6 @@ import io
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse
@@ -15,9 +14,9 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import Config
 from .engine import Monitor
+from .tz import KYIV
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-KYIV = ZoneInfo("Europe/Kyiv")
 
 monitor: Monitor | None = None
 

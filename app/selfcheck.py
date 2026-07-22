@@ -11,13 +11,11 @@ import asyncio
 import sys
 import time
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 
 from .client import BinanceClient, IPBannedError
 from .config import Config
 from . import metrics
-
-KYIV = ZoneInfo("Europe/Kyiv")
+from .tz import KYIV
 
 
 def _fmt_ms(ms: int) -> str:

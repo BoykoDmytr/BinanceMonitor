@@ -7,14 +7,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 
 import numpy as np
 
 from . import metrics
 from .config import Config
-
-KYIV = ZoneInfo("Europe/Kyiv")
+from .tz import KYIV
 
 
 def kyiv_dow_hour(ms: int) -> tuple[int, int]:
