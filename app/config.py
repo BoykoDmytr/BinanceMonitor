@@ -8,13 +8,22 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.json"
 ALIASES_PATH = ROOT / "aliases.json"
-DB_PATH = ROOT / "data" / "monitor.sqlite3"
+# Шлях БД можна винести на постійний том (напр. /data на Fly) через env
+DB_PATH = Path(os.environ.get("BMM_DB_PATH", str(ROOT / "data" / "monitor.sqlite3")))
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    val = os.environ.get(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "on")
 
 
 @dataclass
@@ -81,6 +90,10 @@ class Config:
                     setattr(cfg, key, value)
             if hosts:
                 cfg.hosts = Hosts(**{**asdict(cfg.hosts), **hosts})
+        # Env-оверрайди — для сервера (Fly): 0.0.0.0, свій порт, без браузера
+        cfg.host = os.environ.get("BMM_HOST", cfg.host)
+        cfg.port = int(os.environ.get("BMM_PORT", cfg.port))
+        cfg.open_browser = _env_bool("BMM_OPEN_BROWSER", cfg.open_browser)
         return cfg
 
 
