@@ -267,7 +267,7 @@ class Monitor:
             ts = int(open_times[-1])
             active, calm_event = self._update_calm(symbol, ts, m["calm_now"])
             m["calm"] = active
-            low_event = self._update_low_total(symbol, m.get("total_bps"))
+            low_event = self._update_low_total(symbol, m)
             self.state[symbol]["metrics"] = m
             self.state[symbol]["last_close_ms"] = ts
             db.upsert_metrics(self.conn, symbol, ts, m)
@@ -304,17 +304,30 @@ class Monitor:
         self._calm_active[symbol] = (active, since)
         return active, event
 
-    def _update_low_total(self, symbol: str, total_bps: float | None) -> dict | None:
-        """Подія, коли total падає нижче порога (з гістерезисом, щоб не блимало)."""
-        thr = self.cfg.notify_low_total_bps
-        if not thr or thr <= 0 or total_bps is None:
+    def _update_low_total(self, symbol: str, m: dict) -> dict | None:
+        """Подія, коли вартість падає нижче порога (з гістерезисом, щоб не блимало).
+
+        Поріг у $ (notify_low_total_usd) має пріоритет над bps
+        (notify_low_total_bps). Порівнюємо Total $ або total_bps відповідно.
+        """
+        usd_thr = self.cfg.notify_low_total_usd
+        bps_thr = self.cfg.notify_low_total_bps
+        if usd_thr and usd_thr > 0:
+            value, thr, unit = m.get("total_usd"), usd_thr, "usd"
+        elif bps_thr and bps_thr > 0:
+            value, thr, unit = m.get("total_bps"), bps_thr, "bps"
+        else:
             return None
+        if value is None:
+            return None
+
         was_low = self._low_total.get(symbol, False)
         event = None
-        if not was_low and total_bps < thr:
-            event = {"kind": "low_total", "total_bps": total_bps, "threshold": thr}
+        if not was_low and value < thr:
+            event = {"kind": "low_total", "threshold": thr, "unit": unit,
+                     "total_bps": m.get("total_bps"), "total_usd": m.get("total_usd")}
             was_low = True
-        elif was_low and total_bps > thr * 1.5:
+        elif was_low and value > thr * 1.5:
             was_low = False  # переозброїти, але без окремого сповіщення
         self._low_total[symbol] = was_low
         return event
@@ -350,8 +363,9 @@ class Monitor:
             return (f"⚪ <b>{symbol}</b> — вийшов зі «спокою» ({hhmm} Київ), "
                     f"тривав {e['duration_ms'] // 60000} хв")
         if kind == "low_total":
-            return (f"💧 <b>{symbol}</b> — total ≤ {f(e['threshold'])} bps, дешево зайти/вийти ({hhmm} Київ)\n"
-                    f"total {f(m.get('total_bps'))} bps ≈ {f(m.get('total_usd'), 3)}$ / {n} USDT "
+            cap = f"{e['threshold']:.3f}$" if e.get("unit") == "usd" else f"{f(e['threshold'])} bps"
+            return (f"💧 <b>{symbol}</b> — вартість ≤ {cap}, дешево зайти/вийти ({hhmm} Київ)\n"
+                    f"{f(m.get('total_usd'), 3)}$ / {n} USDT · total {f(m.get('total_bps'))} bps "
                     f"(RT {f(m.get('roundtrip_bps'))} + дрейф {f(m.get('drift_bps'))})")
         return None
 

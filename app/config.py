@@ -69,7 +69,9 @@ class Config:
 
     # Сповіщення в Telegram (для обраних монет; токен/чат — через env)
     notify_calm_events: bool = True          # вхід/вихід зі стану «спокійно»
-    notify_low_total_bps: float = 5.0        # алерт коли total падає нижче (0 = вимкнено)
+    notify_low_total_bps: float = 5.0        # алерт коли total падає нижче, у bps (0 = вимкнено)
+    notify_low_total_usd: float = 0.0        # той самий алерт, але поріг у $ (Total $);
+                                             # якщо > 0 — має пріоритет над bps
 
     # Мережа
     request_weight_limit: int = 1200   # фолбек, якщо не прочитали з exchangeInfo
@@ -101,6 +103,8 @@ class Config:
         cfg.notify_calm_events = _env_bool("BMM_NOTIFY_CALM", cfg.notify_calm_events)
         if os.environ.get("BMM_NOTIFY_LOW_TOTAL_BPS"):
             cfg.notify_low_total_bps = float(os.environ["BMM_NOTIFY_LOW_TOTAL_BPS"])
+        if os.environ.get("BMM_NOTIFY_LOW_TOTAL_USD"):
+            cfg.notify_low_total_usd = float(os.environ["BMM_NOTIFY_LOW_TOTAL_USD"])
         return cfg
 
 

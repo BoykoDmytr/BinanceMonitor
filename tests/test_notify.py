@@ -21,6 +21,15 @@ METR = {
 }
 
 
+def _mbps(bps):
+    """Метрики з заданим total_bps (і похідним total_usd на 256 USDT)."""
+    return {"total_bps": bps, "total_usd": bps / 10000 * 256}
+
+
+def _musd(usd):
+    return {"total_usd": usd, "total_bps": usd / 256 * 10000}
+
+
 def test_low_total_edge_trigger_with_hysteresis():
     cfg = Config()
     cfg.notify_low_total_bps = 5.0
@@ -28,22 +37,37 @@ def test_low_total_edge_trigger_with_hysteresis():
     sym = "TESTUSDT"
 
     # Перше падіння нижче порога → подія
-    ev = m._update_low_total(sym, 2.0)
-    assert ev and ev["kind"] == "low_total"
+    ev = m._update_low_total(sym, _mbps(2.0))
+    assert ev and ev["kind"] == "low_total" and ev["unit"] == "bps"
     # Лишається низьким → без повторної події (не спамимо)
-    assert m._update_low_total(sym, 2.0) is None
+    assert m._update_low_total(sym, _mbps(2.0)) is None
     # Піднявся вище гістерезису (5 × 1.5 = 7.5) → переозброєння, без події
-    assert m._update_low_total(sym, 8.0) is None
+    assert m._update_low_total(sym, _mbps(8.0)) is None
     # Знову падіння → нова подія
-    ev2 = m._update_low_total(sym, 1.0)
+    ev2 = m._update_low_total(sym, _mbps(1.0))
     assert ev2 and ev2["kind"] == "low_total"
 
 
-def test_low_total_disabled_when_threshold_zero():
+def test_low_total_usd_threshold_takes_priority():
+    cfg = Config()
+    cfg.notify_low_total_bps = 5.0     # має ігноруватись, бо задано $-поріг
+    cfg.notify_low_total_usd = 0.035
+    m, _ = _monitor(cfg)
+    sym = "TESTUSDT"
+
+    # Вартість $0.11 (total 4.3 bps) — за bps було б «низько», а за $ — ні
+    assert m._update_low_total(sym, _mbps(4.3)) is None
+    # Вартість $0.03 (≤ 0.035) → подія у $-режимі
+    ev = m._update_low_total(sym, _musd(0.030))
+    assert ev and ev["unit"] == "usd" and ev["threshold"] == 0.035
+
+
+def test_low_total_disabled_when_thresholds_zero():
     cfg = Config()
     cfg.notify_low_total_bps = 0.0
+    cfg.notify_low_total_usd = 0.0
     m, _ = _monitor(cfg)
-    assert m._update_low_total("TESTUSDT", 0.1) is None
+    assert m._update_low_total("TESTUSDT", _mbps(0.1)) is None
 
 
 def test_calm_enter_after_k_minutes():
