@@ -94,10 +94,13 @@ class Config:
                     setattr(cfg, key, value)
             if hosts:
                 cfg.hosts = Hosts(**{**asdict(cfg.hosts), **hosts})
-        # Env-оверрайди — для сервера (Fly): 0.0.0.0, свій порт, без браузера
+        # Env-оверрайди — для сервера (Fly), де немає config.json
         cfg.host = os.environ.get("BMM_HOST", cfg.host)
         cfg.port = int(os.environ.get("BMM_PORT", cfg.port))
         cfg.open_browser = _env_bool("BMM_OPEN_BROWSER", cfg.open_browser)
+        cfg.notify_calm_events = _env_bool("BMM_NOTIFY_CALM", cfg.notify_calm_events)
+        if os.environ.get("BMM_NOTIFY_LOW_TOTAL_BPS"):
+            cfg.notify_low_total_bps = float(os.environ["BMM_NOTIFY_LOW_TOTAL_BPS"])
         return cfg
 
 

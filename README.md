@@ -125,8 +125,10 @@ BMM_TG_TOKEN="123456:AA..." BMM_TG_CHAT="@my_channel" python -m app
 У шапці має з'явитися **TG ✓**. Кнопка **«Тест TG»** (біля журналу) надішле
 пробне повідомлення. Дзвіночок 🔔 у рядку вмикає/вимикає сповіщення для монети.
 
-Поріг «низького total» — `notify_low_total_bps` у `config.json` (за замовчуванням
-5 bps; `0` — вимкнути). Вхід/вихід зі «спокою» — `notify_calm_events`.
+Поріг «низького total» — `notify_low_total_bps` (за замовчуванням 5 bps; `0` —
+вимкнути), вхід/вихід зі «спокою» — `notify_calm_events`. Локально їх можна
+задати в `config.json`, а на сервері (де config.json немає) — через env:
+`BMM_NOTIFY_LOW_TOTAL_BPS`, `BMM_NOTIFY_CALM`.
 
 ## Джерела даних і мережа
 
