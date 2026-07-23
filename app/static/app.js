@@ -357,7 +357,7 @@ function renderHeatmap(grid) {
       }
     }
   }
-  el.innerHTML = html;
+  el.innerHTML = `<div class="hm-grid">${html}</div>`;
 }
 
 // ─────────────────────────── журнал ───────────────────────────
