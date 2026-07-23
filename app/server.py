@@ -33,6 +33,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Binance Market Monitor", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def revalidate_assets(request, call_next):
+    """no-cache для сторінки та статики: браузер завжди перевіряє свіжість JS/CSS.
+
+    StaticFiles віддає ETag/Last-Modified, тож незмінене повертається як 304 —
+    трафік мінімальний, але оновлений код підхоплюється без ручного очищення кешу.
+    """
+    resp = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.startswith("/static/"):
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return resp
+
+
 def _mon() -> Monitor:
     if monitor is None:
         raise HTTPException(503, "Движок ще не готовий")
