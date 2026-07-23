@@ -10,22 +10,28 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from datetime import datetime, timezone
 
 import websockets
 
 from . import analytics, backfill, db
 from .client import BinanceClient, IPBannedError
 from .config import Config
+from .notifier import TelegramNotifier
+from .tz import KYIV
 
 MINUTE_MS = 60_000
 
 
 class Monitor:
-    def __init__(self, cfg: Config | None = None):
+    def __init__(self, cfg: Config | None = None, conn=None):
         self.cfg = cfg or Config.load()
-        from .config import DB_PATH
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = db.connect(DB_PATH)
+        if conn is not None:
+            self.conn = conn                      # для тестів: in-memory БД
+        else:
+            from .config import DB_PATH
+            DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self.conn = db.connect(DB_PATH)
         db.init_db(self.conn)
         self.client = BinanceClient(self.cfg)
 
@@ -35,6 +41,9 @@ class Monitor:
 
         self._calm_streak: dict[str, int] = {}
         self._calm_active: dict[str, tuple[bool, int | None]] = {}
+        self._low_total: dict[str, bool] = {}   # символ → чи total зараз «низький»
+
+        self.notifier = TelegramNotifier()
 
         self._ws: websockets.WebSocketClientProtocol | None = None
         self._ws_task: asyncio.Task | None = None
@@ -256,32 +265,95 @@ class Monitor:
             )
 
             ts = int(open_times[-1])
-            m["calm"] = self._update_calm(symbol, ts, m["calm_now"])
+            active, calm_event = self._update_calm(symbol, ts, m["calm_now"])
+            m["calm"] = active
+            low_event = self._update_low_total(symbol, m.get("total_bps"))
             self.state[symbol]["metrics"] = m
             self.state[symbol]["last_close_ms"] = ts
             db.upsert_metrics(self.conn, symbol, ts, m)
 
-    def _update_calm(self, symbol: str, ts: int, calm_now: bool) -> bool:
-        """Стан «спокійно» = calm_now витримано K хвилин поспіль. Журналить входи/виходи."""
+            events = [e for e in (calm_event, low_event) if e]
+            if events:
+                await self._notify(symbol, events, m, ts)
+
+    def _update_calm(self, symbol: str, ts: int, calm_now: bool) -> tuple[bool, dict | None]:
+        """Стан «спокійно» = calm_now витримано K хвилин поспіль. Журналить входи/виходи.
+
+        Повертає (активний_стан, подія|None) — подія йде в сповіщення.
+        """
         streak = self._calm_streak.get(symbol, 0)
         streak = streak + 1 if calm_now else 0
         self._calm_streak[symbol] = streak
 
+        event: dict | None = None
         active, since = self._calm_active.get(symbol, (False, None))
         if not active and streak >= self.cfg.calm_minutes:
             since = ts - (self.cfg.calm_minutes - 1) * MINUTE_MS
             active = True
             db.add_alert(self.conn, symbol, since, "calm_enter",
                          json.dumps({"since": since}))
+            event = {"kind": "calm_enter", "since": since}
         elif active and not calm_now:
             duration = ts - (since or ts)
             db.add_alert(self.conn, symbol, ts, "calm_exit",
                          json.dumps({"since": since, "until": ts,
                                      "duration_ms": duration}))
+            event = {"kind": "calm_exit", "duration_ms": duration}
             active = False
             since = None
         self._calm_active[symbol] = (active, since)
-        return active
+        return active, event
+
+    def _update_low_total(self, symbol: str, total_bps: float | None) -> dict | None:
+        """Подія, коли total падає нижче порога (з гістерезисом, щоб не блимало)."""
+        thr = self.cfg.notify_low_total_bps
+        if not thr or thr <= 0 or total_bps is None:
+            return None
+        was_low = self._low_total.get(symbol, False)
+        event = None
+        if not was_low and total_bps < thr:
+            event = {"kind": "low_total", "total_bps": total_bps, "threshold": thr}
+            was_low = True
+        elif was_low and total_bps > thr * 1.5:
+            was_low = False  # переозброїти, але без окремого сповіщення
+        self._low_total[symbol] = was_low
+        return event
+
+    # ─────────────────── сповіщення Telegram ───────────────────
+
+    async def _notify(self, symbol: str, events: list[dict], m: dict, ts: int) -> None:
+        if not self.notifier.enabled:
+            return
+        if not db.get_notify_map(self.conn).get(symbol, True):
+            return  # сповіщення лише для обраних монет
+        for e in events:
+            text = self._format_event(symbol, e, m, ts)
+            if text:
+                asyncio.create_task(self.notifier.send(text))
+
+    def _format_event(self, symbol: str, e: dict, m: dict, ts: int) -> str | None:
+        kind = e["kind"]
+        hhmm = datetime.fromtimestamp(ts / 1000, tz=timezone.utc).astimezone(KYIV).strftime("%H:%M")
+        n = int(self.cfg.notional_usdt)
+
+        def f(x, d=2):
+            return "—" if x is None else f"{x:.{d}f}"
+
+        if kind in ("calm_enter", "calm_exit") and not self.cfg.notify_calm_events:
+            return None
+        if kind == "calm_enter":
+            return (f"🟢 <b>{symbol}</b> — стан «спокійно» ({hhmm} Київ)\n"
+                    f"σ {f(m.get('sigma_bps'))} bps ({f(m.get('sigma_pct'), 0)}%ᵖ) · "
+                    f"RT {f(m.get('roundtrip_bps'))} bps · "
+                    f"total {f(m.get('total_bps'))} bps ≈ {f(m.get('total_usd'), 3)}$ / {n} USDT")
+        if kind == "calm_exit":
+            return (f"⚪ <b>{symbol}</b> — вийшов зі «спокою» ({hhmm} Київ), "
+                    f"тривав {e['duration_ms'] // 60000} хв")
+        if kind == "low_total":
+            return (f"💧 <b>{symbol}</b> — total ≤ {f(e['threshold'])} bps, дешево зайти/вийти ({hhmm} Київ)\n"
+                    f"total {f(m.get('total_bps'))} bps ≈ {f(m.get('total_usd'), 3)}$ / {n} USDT "
+                    f"(RT {f(m.get('roundtrip_bps'))} + дрейф {f(m.get('drift_bps'))})")
+        return None
 
     # ─────────────────── пошук ───────────────────
 
@@ -335,6 +407,7 @@ class Monitor:
 
     def watchlist_view(self) -> list[dict]:
         out = []
+        notify_map = db.get_notify_map(self.conn)
         for symbol in db.get_watchlist(self.conn):
             st = self.state.get(symbol) or {}
             out.append({
@@ -345,8 +418,15 @@ class Monitor:
                 "metrics": st.get("metrics"),
                 "last_close_ms": st.get("last_close_ms"),
                 "backfill": self.backfill_progress.get(symbol),
+                "notify": notify_map.get(symbol, True),
             })
         return out
+
+    def set_notify(self, symbol: str, on: bool) -> None:
+        db.set_notify(self.conn, symbol.upper(), on)
+
+    async def notify_test(self) -> dict:
+        return await self.notifier.test()
 
     def symbol_detail(self, symbol: str, candles: int = 720) -> dict:
         symbol = symbol.upper()
@@ -415,4 +495,6 @@ class Monitor:
             "banned": self.banned,
             "status": self.status_msg,
             "last_error": self.client.last_error,
+            "tg_enabled": self.notifier.enabled,
+            "tg_error": self.notifier.last_error,
         }

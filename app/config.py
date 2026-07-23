@@ -67,6 +67,10 @@ class Config:
     color_green_max_bps: float = 20.0
     color_yellow_max_bps: float = 50.0
 
+    # Сповіщення в Telegram (для обраних монет; токен/чат — через env)
+    notify_calm_events: bool = True          # вхід/вихід зі стану «спокійно»
+    notify_low_total_bps: float = 5.0        # алерт коли total падає нижче (0 = вимкнено)
+
     # Мережа
     request_weight_limit: int = 1200   # фолбек, якщо не прочитали з exchangeInfo
     weight_soft_ratio: float = 0.80    # тримати використання нижче 80% ліміту

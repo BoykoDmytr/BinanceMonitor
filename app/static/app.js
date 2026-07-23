@@ -43,8 +43,12 @@ async function pollLimits() {
     const pct = l.weight_limit ? Math.round((l.used_weight / l.weight_limit) * 100) : 0;
     let cls = '';
     if (pct >= 80) cls = 'bad'; else if (pct >= 60) cls = 'warn';
+    let tg;
+    if (!l.tg_enabled) tg = '<span class="muted">TG вимк</span>';
+    else if (l.tg_error) tg = `<span class="warn" title="${String(l.tg_error).replace(/"/g, '&quot;')}">TG ⚠</span>`;
+    else tg = '<span class="ok">TG ✓</span>';
     $('limits').innerHTML =
-      `вага <span class="${cls}">${l.used_weight}/${l.weight_limit} (${pct}%)</span> · ${l.status || ''}`;
+      `вага <span class="${cls}">${l.used_weight}/${l.weight_limit} (${pct}%)</span> · ${tg} · ${l.status || ''}`;
 
     const banner = $('banner');
     if (l.banned) {
@@ -178,16 +182,34 @@ function renderWatchlist() {
       <td class="num">${num(m?.total_bps)}</td>
       <td class="num">${num(m?.total_usd, 3)}</td>
       <td><span class="badge ${st.cls}">${st.label}</span></td>
-      <td><button class="btn del" data-del="${r.symbol}">✕</button></td>
+      <td class="row-actions">
+        <button class="bell ${r.notify ? 'on' : 'off'}" data-bell="${r.symbol}"
+          title="${r.notify ? 'сповіщення увімкнені' : 'сповіщення вимкнені'}">${r.notify ? '🔔' : '🔕'}</button>
+        <button class="btn del" data-del="${r.symbol}">✕</button>
+      </td>
     </tr>`;
   }).join('');
 
   body.querySelectorAll('tr').forEach(tr => {
     tr.addEventListener('click', () => selectSymbol(tr.dataset.sym));
   });
+  body.querySelectorAll('[data-bell]').forEach(b => {
+    b.addEventListener('click', (e) => toggleNotify(b.dataset.bell, e));
+  });
   body.querySelectorAll('[data-del]').forEach(b => {
     b.addEventListener('click', (e) => removeSymbol(b.dataset.del, e));
   });
+}
+
+async function toggleNotify(symbol, ev) {
+  ev.stopPropagation();
+  const row = lastRows.find(r => r.symbol === symbol);
+  const on = !(row && row.notify);
+  await fetch(`/api/watchlist/${symbol}/notify`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ on }),
+  });
+  loadWatchlist();
 }
 
 function initSort() {
@@ -363,6 +385,16 @@ async function init() {
   initSearch();
   initSort();
   $('journalOnlySel').addEventListener('change', loadJournal);
+  $('tgTest').addEventListener('click', async () => {
+    const btn = $('tgTest');
+    btn.disabled = true; btn.textContent = 'надсилаю…';
+    try {
+      const r = await fetch('/api/notify/test', { method: 'POST' }).then(r => r.json());
+      alert(r.ok ? 'Тестове сповіщення надіслано ✅ Перевірте Telegram.'
+                 : 'Не вдалося: ' + (r.error || 'TG не налаштований (BMM_TG_TOKEN / BMM_TG_CHAT)'));
+    } catch (e) { alert('Помилка запиту: ' + e); }
+    btn.disabled = false; btn.textContent = 'Тест TG';
+  });
 
   await loadWatchlist();
   pollLimits();

@@ -85,6 +85,17 @@ async def watchlist_remove(symbol: str):
     return {"ok": True}
 
 
+@app.post("/api/watchlist/{symbol}/notify")
+async def watchlist_notify(symbol: str, payload: dict):
+    _mon().set_notify(symbol, bool(payload.get("on", True)))
+    return {"ok": True}
+
+
+@app.post("/api/notify/test")
+async def notify_test():
+    return await _mon().notify_test()
+
+
 @app.get("/api/symbol/{symbol}")
 async def symbol_detail(symbol: str):
     return _mon().symbol_detail(symbol)

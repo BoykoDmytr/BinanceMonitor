@@ -32,6 +32,8 @@ body {
 .limits { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .limits .warn { color: var(--yellow); }
 .limits .bad { color: var(--red); }
+.limits .ok { color: var(--green); }
+.limits .muted { color: var(--muted); }
 
 .banner {
   padding: 10px 18px; background: #3a1d1d; color: #ffd9d6;
@@ -110,6 +112,10 @@ td .sym { font-family: var(--mono); font-weight: 600; }
 .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
 .btn.del { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 3px 8px; }
 .btn.del:hover { color: var(--red); border-color: var(--red); }
+.row-actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+.bell { background: transparent; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 5px; line-height: 1; }
+.bell.off { filter: grayscale(1); opacity: .45; }
+.bell:hover { background: var(--panel-2); }
 
 .empty { color: var(--muted); padding: 18px 6px; font-size: 13px; line-height: 1.5; }
 .empty.small { padding: 8px 6px; font-size: 12px; }

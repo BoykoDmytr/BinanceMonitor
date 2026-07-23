@@ -44,6 +44,16 @@ fly volumes create bmm_data --region ams --size 1
 fly deploy
 ```
 
+## 3.5. (Необов'язково) Сповіщення в Telegram
+
+Токен і чат — це секрети, тож задаються через `fly secrets` (не в коді):
+```powershell
+fly secrets set BMM_TG_TOKEN="123456:AA..." BMM_TG_CHAT="@my_channel"
+```
+Після цього застосунок перезапуститься сам і почне слати сповіщення для монет
+із увімкненим дзвіночком. Як створити бота й дізнатися chat_id — див. README,
+розділ «Сповіщення в Telegram».
+
 ## 4. Відкрити
 
 ```powershell

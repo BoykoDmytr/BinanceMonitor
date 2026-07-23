@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS alerts (
   id INTEGER PRIMARY KEY, symbol TEXT, ts INTEGER, kind TEXT, payload TEXT
 );
 CREATE TABLE IF NOT EXISTS watchlist (
-  symbol TEXT PRIMARY KEY, added_ms INTEGER
+  symbol TEXT PRIMARY KEY, added_ms INTEGER, notify INTEGER DEFAULT 1
 );
 """
 
@@ -46,6 +46,10 @@ def connect(path: str | Path = ":memory:") -> sqlite3.Connection:
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    # Міграція для старих БД: додати колонку notify, якщо її ще немає
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(watchlist)").fetchall()}
+    if "notify" not in cols:
+        conn.execute("ALTER TABLE watchlist ADD COLUMN notify INTEGER DEFAULT 1")
     conn.commit()
 
 
@@ -173,3 +177,14 @@ def remove_from_watchlist(conn: sqlite3.Connection, symbol: str) -> None:
 def get_watchlist(conn: sqlite3.Connection) -> list[str]:
     cur = conn.execute("SELECT symbol FROM watchlist ORDER BY added_ms ASC")
     return [r[0] for r in cur.fetchall()]
+
+
+def set_notify(conn: sqlite3.Connection, symbol: str, on: bool) -> None:
+    conn.execute("UPDATE watchlist SET notify=? WHERE symbol=?", (int(on), symbol))
+    conn.commit()
+
+
+def get_notify_map(conn: sqlite3.Connection) -> dict[str, bool]:
+    """symbol → чи слати сповіщення (обрані монети)."""
+    cur = conn.execute("SELECT symbol, notify FROM watchlist")
+    return {r[0]: bool(r[1]) for r in cur.fetchall()}
